@@ -1,0 +1,74 @@
+name: Auto Promotion Pipeline
+
+on:
+  push:
+    paths:
+      - 'development/**'
+      - 'pre-releases/**'
+      - 'releases/**'
+    branches:
+      - main
+      - development
+      - pre-releases
+      - releases
+
+jobs:
+  promote:
+    runs-on:  wsl-runner
+
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: Detect Promotion Level
+        id: detect
+        run: |
+          echo "CHANGED_PATHS<<EOF" >> $GITHUB_ENV
+          git diff --name-only HEAD~1 HEAD >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+          if grep -q '^development/' <<< "$CHANGED_PATHS"; then
+            echo "target_env=dev" >> $GITHUB_ENV
+            echo "target_branch=dev" >> $GITHUB_ENV
+            echo "source_dir=development" >> $GITHUB_ENV
+          elif grep -q '^pre-releases/' <<< "$CHANGED_PATHS"; then
+            echo "target_env=qa" >> $GITHUB_ENV
+            echo "target_branch=qa" >> $GITHUB_ENV
+            echo "source_dir=pre-releases" >> $GITHUB_ENV
+          elif grep -q '^releases/' <<< "$CHANGED_PATHS"; then
+            echo "target_env=prod" >> $GITHUB_ENV
+            echo "target_branch=prod" >> $GITHUB_ENV
+            echo "source_dir=releases" >> $GITHUB_ENV
+          else
+            echo "No matching folder changed."
+            exit 1
+          fi
+
+      - name: Prepare Promotion Commit
+        run: |
+          mkdir -p promotion
+          cp -R $source_dir/* promotion/
+
+      - name: Create Promotion Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: auto-promote-${{ env.target_env }}-${{ github.run_number }}
+          base: ${{ env.target_branch }}
+          title: "Auto Promotion to ${{ env.target_env }} environment"
+          body: |
+            Auto promotion triggered from **${{ env.source_dir }}**.
+
+            Changes:
+            ```
+            $CHANGED_PATHS
+            ```
+          commit-message: "Auto promotion: Update manifests from ${{ env.source_dir }}"
+          add-paths: |
+            promotion/**
+          labels: |
+            auto-promotion
+          reviewers: Shadab
