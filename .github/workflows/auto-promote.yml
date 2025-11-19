@@ -20,7 +20,7 @@ jobs:
         shell: bash
         run: |
             # Get the source folder from repository_dispatch payload
-            RAW_SOURCE="${{ github.event.client_payload.source }}"
+            RAW_SOURCE="${{ github.event.client_payload }}"
 
             echo "RAW_SOURCE: $RAW_SOURCE"
 
