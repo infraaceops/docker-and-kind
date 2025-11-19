@@ -20,9 +20,7 @@ jobs:
         shell: bash
         run: |
             # Get the source folder from repository_dispatch payload
-            RAW_SOURCE="${{ github.event }}"
-
-
+            echo "Payload: ${{ toJson(github.event.client_payload) }}"
       - name: Create Promotion Pull Request
         uses: peter-evans/create-pull-request@v6
         with:
