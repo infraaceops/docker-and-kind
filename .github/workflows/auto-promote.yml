@@ -21,7 +21,7 @@ jobs:
           RAW_SOURCE="${{ github.event.client_payload.source }}"
           
           # remove leading "./"
-          CLEAN_SOURCE=$(echo "$RAW_SOURCE" | sed 's#^\./##')
+          CLEAN_SOURCE=$(echo "$SOURCE" | sed 's#^\./##')
 
           echo "Clean source dir: $CLEAN_SOURCE"
 
