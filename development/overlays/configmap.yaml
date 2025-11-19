@@ -6,3 +6,4 @@ data:
   env: development
   name: app-dev
   tag: true
+  all: true
