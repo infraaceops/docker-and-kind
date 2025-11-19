@@ -4,4 +4,4 @@ metadata:
   name: sample-service
 data:
   service: sample-service
-  all: true
+  all: false

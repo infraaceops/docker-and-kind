@@ -2,8 +2,11 @@ name: Deploy to Kubernetes and Trigger Promotion
 
 on:
   push:
-    branches:
-      - main
+    paths:
+      - 'development/**'
+      - 'pre-releases/**'
+      - 'releases/**'
+      - 'base/**'
 
 jobs:
   deploy:
