@@ -3,72 +3,89 @@ name: Auto Promotion Pipeline
 on:
   push:
     paths:
-      - 'development/**'
-      - 'pre-releases/**'
-      - 'releases/**'
-    branches:
-      - main
-      - development
-      - pre-releases
-      - releases
+      - "development/**"
+      - "pre-releases/**"
+      - "releases/**"
 
 jobs:
   promote:
-    runs-on:  wsl-runner
+    runs-on: wsl-runner
 
     permissions:
       contents: write
       pull-requests: write
 
     steps:
-      - name: Checkout Repo
+      - name: Checkout repo
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # ← IMPORTANT: required for diff and folder detection
 
-      - name: Detect Promotion Level
-        id: detect
+      - name: Get changed files safely
+        id: changes
         run: |
-          echo "CHANGED_PATHS<<EOF" >> $GITHUB_ENV
-          git diff --name-only HEAD~1 HEAD >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
+          git fetch --all
 
-          if grep -q '^development/' <<< "$CHANGED_PATHS"; then
-            echo "target_env=dev" >> $GITHUB_ENV
-            echo "target_branch=dev" >> $GITHUB_ENV
-            echo "source_dir=development" >> $GITHUB_ENV
-          elif grep -q '^pre-releases/' <<< "$CHANGED_PATHS"; then
-            echo "target_env=qa" >> $GITHUB_ENV
-            echo "target_branch=qa" >> $GITHUB_ENV
-            echo "source_dir=pre-releases" >> $GITHUB_ENV
-          elif grep -q '^releases/' <<< "$CHANGED_PATHS"; then
-            echo "target_env=prod" >> $GITHUB_ENV
-            echo "target_branch=prod" >> $GITHUB_ENV
-            echo "source_dir=releases" >> $GITHUB_ENV
+          # Detect changes between last two commits safely
+          if [ "$(git rev-list --count HEAD)" -eq 1 ]; then
+            echo "Only one commit detected, using full tree."
+            git ls-files > changed.txt
           else
-            echo "No matching folder changed."
-            exit 1
+            git diff --name-only HEAD^ HEAD > changed.txt
           fi
 
-      - name: Prepare Promotion Commit
+          echo "Changed files:"
+          cat changed.txt
+
+      - name: Detect promotion target
+        id: detect
         run: |
-          mkdir -p promotion
+          TARGET_BRANCH=""
+          SOURCE_DIR=""
+
+          if grep -q "^development/" changed.txt; then
+            TARGET_BRANCH="dev"
+            SOURCE_DIR="development"
+          fi
+
+          if grep -q "^pre-releases/" changed.txt; then
+            TARGET_BRANCH="qa"
+            SOURCE_DIR="pre-releases"
+          fi
+
+          if grep -q "^releases/" changed.txt; then
+            TARGET_BRANCH="prod"
+            SOURCE_DIR="releases"
+          fi
+
+          if [ -z "$TARGET_BRANCH" ]; then
+            echo "No promotion path matched. Exiting."
+            exit 0
+          fi
+
+          echo "target_branch=$TARGET_BRANCH" >> $GITHUB_ENV
+          echo "source_dir=$SOURCE_DIR" >> $GITHUB_ENV
+
+          echo "Promotion target: $TARGET_BRANCH from $SOURCE_DIR"
+
+      - name: Prepare promotion files
+        run: |
+          mkdir promotion || true
           cp -R $source_dir/* promotion/
 
-      - name: Create Promotion Pull Request
+      - name: Create promotion Pull Request
         uses: peter-evans/create-pull-request@v6
         with:
-          branch: auto-promote-${{ env.target_env }}-${{ github.run_number }}
+          branch: auto-promote-${{ env.target_branch }}-${{ github.run_number }}
           base: ${{ env.target_branch }}
-          title: "Auto Promotion to ${{ env.target_env }} environment"
+          title: "Auto Promotion to ${{ env.target_branch }}"
           body: |
-            Auto promotion triggered from **${{ env.source_dir }}**.
-
-            Changes:
+            Auto promotion from **${{ env.source_dir }}**.
+            Triggered by changes:
             ```
-            $CHANGED_PATHS
+            $(cat changed.txt)
             ```
-          commit-message: "Auto promotion: Update manifests from ${{ env.source_dir }}"
-          add-paths: |
-            promotion/**
-          labels: |
-            auto-promotion
+          commit-message: "Auto promotion: ${{ env.source_dir }} → ${{ env.target_branch }}"
+          add-paths: promotion/**
+          labels: auto-promotion
           reviewers: Shadab
