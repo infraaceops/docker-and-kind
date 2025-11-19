@@ -19,17 +19,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install kubectl & kustomize
-        run: |
-          sudo snap install kubectl --classic
-          sudo snap install kustomize
-
-      - name: Configure kubeconfig
-        run: |
-          mkdir -p ~/.kube
-          echo "${{ secrets.KUBECONFIG_CONTENT }}" > ~/.kube/config
-          chmod 600 ~/.kube/config
-
       - name: Detect Deployment Folder
         id: detect
         run: |
