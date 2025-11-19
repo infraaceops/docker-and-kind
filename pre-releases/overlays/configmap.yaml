@@ -4,4 +4,4 @@ metadata:
   name: app-qa
 data:
   env: pre-release
-  tag: true
+  tag: false
