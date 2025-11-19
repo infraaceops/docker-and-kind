@@ -19,34 +19,28 @@ jobs:
         id: detect
         shell: bash
         run: |
-            # Get the source folder from repository_dispatch payload
-            RAW_SOURCE="${{ github.event.client_payload.source }}"
+          RAW_SOURCE="${{ github.event.client_payload.source }}"
+          CLEAN_SOURCE=$(echo "$RAW_SOURCE" | sed 's#^\./##' | tr -d '"')
+          echo "CLEAN_SOURCE=$CLEAN_SOURCE"
 
-            echo "RAW_SOURCE: $RAW_SOURCE"
-
-            # Remove leading ./ and possible quotes
-            CLEAN_SOURCE=$(echo "$RAW_SOURCE" | sed 's#^\./##' | tr -d '"')
-
-            echo "CLEAN_SOURCE: $CLEAN_SOURCE"
-
-            case "$CLEAN_SOURCE" in
+          case "$CLEAN_SOURCE" in
             development)
-                echo "target_branch=dev" >> $GITHUB_ENV
-                ;;
+              TARGET_BRANCH="pre-releases"
+              ;;
             pre-releases)
-                echo "target_branch=qa" >> $GITHUB_ENV
-                ;;
+              TARGET_BRANCH="releases"
+              ;;
             releases)
-                echo "target_branch=prod" >> $GITHUB_ENV
-                ;;
+              TARGET_BRANCH="prod"
+              ;;
             *)
-                echo "Unknown source folder: $CLEAN_SOURCE"
-                exit 1
-                ;;
-            esac
+              echo "Unknown source folder: $CLEAN_SOURCE"
+              exit 1
+              ;;
+          esac
 
-            echo "source_dir=$CLEAN_SOURCE" >> $GITHUB_ENV
-
+          echo "target_branch=$TARGET_BRANCH" >> $GITHUB_ENV
+          echo "source_dir=$CLEAN_SOURCE" >> $GITHUB_ENV
 
       - name: Create Promotion Pull Request
         uses: peter-evans/create-pull-request@v6
@@ -62,4 +56,3 @@ jobs:
             ${{ env.source_dir }}/**
           labels: auto-promotion
           reviewers: Shadab
-            
