@@ -18,19 +18,25 @@ jobs:
       - name: Detect Promotion Target
         id: detect
         run: |
-          SOURCE="${{ github.event.client_payload.source }}"
+          RAW_SOURCE="${{ github.event.client_payload.source }}"
+          
+          # remove leading "./"
+          CLEAN_SOURCE=$(echo "$RAW_SOURCE" | sed 's#^\./##')
 
-          if [[ "$SOURCE" == "development" ]]; then
+          echo "Clean source dir: $CLEAN_SOURCE"
+
+          if [[ "$CLEAN_SOURCE" == "development" ]]; then
             echo "target_branch=dev" >> $GITHUB_ENV
-          elif [[ "$SOURCE" == "pre-releases" ]]; then
+          elif [[ "$CLEAN_SOURCE" == "pre-releases" ]]; then
             echo "target_branch=qa" >> $GITHUB_ENV
-          elif [[ "$SOURCE" == "releases" ]]; then
+          elif [[ "$CLEAN_SOURCE" == "releases" ]]; then
             echo "target_branch=prod" >> $GITHUB_ENV
           else
-            echo "Unknown source path: $SOURCE"
+            echo "Unknown source folder: $CLEAN_SOURCE"
             exit 1
           fi
-          echo "source_dir=$SOURCE" >> $GITHUB_ENV
+
+          echo "source_dir=$CLEAN_SOURCE" >> $GITHUB_ENV
 
       - name: Create Promotion Pull Request
         uses: peter-evans/create-pull-request@v6
