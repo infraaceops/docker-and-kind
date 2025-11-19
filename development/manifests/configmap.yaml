@@ -4,3 +4,4 @@ metadata:
   name: app-dev
 data:
   env: development
+  name: app-dev
