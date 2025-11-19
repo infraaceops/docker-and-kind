@@ -1,0 +1,9 @@
+resources:
+  - ../base
+
+namePrefix: dev-
+commonLabels:
+  env: development
+
+patches:
+  - path: replicas.yaml

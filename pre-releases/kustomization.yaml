@@ -1,0 +1,9 @@
+resources:
+  - ../base
+
+namePrefix: qa-
+commonLabels:
+  env: qa
+
+patches:
+  - path: replicas.yaml

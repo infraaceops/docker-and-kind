@@ -1,0 +1,48 @@
+name: Auto Promotion After Deployment
+
+on:
+  repository_dispatch:
+    types: [k8s-deploy-success]
+
+jobs:
+  promote:
+    runs-on: wsl-runner
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Detect Promotion Target
+        id: detect
+        run: |
+          SOURCE="${{ github.event.client_payload.source }}"
+
+          if [[ "$SOURCE" == "development" ]]; then
+            echo "target_branch=dev" >> $GITHUB_ENV
+          elif [[ "$SOURCE" == "pre-releases" ]]; then
+            echo "target_branch=qa" >> $GITHUB_ENV
+          elif [[ "$SOURCE" == "releases" ]]; then
+            echo "target_branch=prod" >> $GITHUB_ENV
+          else
+            echo "Unknown source path: $SOURCE"
+            exit 1
+          fi
+          echo "source_dir=$SOURCE" >> $GITHUB_ENV
+
+      - name: Create Promotion Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: auto-promote-${{ env.target_branch }}-${{ github.run_number }}
+          base: ${{ env.target_branch }}
+          title: "Auto-Promotion from ${{ env.source_dir }}"
+          body: |
+            Kubernetes deployment **succeeded**, triggering auto-promotion.
+            Source folder: `${{ env.source_dir }}`
+          commit-message: "Auto promotion from ${{ env.source_dir }} → ${{ env.target_branch }}"
+          add-paths: |
+            ${{ env.source_dir }}/**
+          labels: auto-promotion
+          reviewers: Shadab

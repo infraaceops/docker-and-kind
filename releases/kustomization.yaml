@@ -1,0 +1,9 @@
+resources:
+  - ../base
+
+namePrefix: prod-
+commonLabels:
+  env: prod
+
+patches:
+  - path: replicas.yaml

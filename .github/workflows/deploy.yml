@@ -1,0 +1,67 @@
+name: Deploy to Kubernetes and Trigger Promotion
+
+on:
+  push:
+    paths:
+      - "development/**"
+      - "pre-releases/**"
+      - "releases/**"
+
+jobs:
+  deploy:
+    runs-on: wsl-runner
+
+    permissions:
+      contents: write
+      actions: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install kubectl & kustomize
+        run: |
+          sudo snap install kubectl --classic
+          sudo snap install kustomize
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG_CONTENT }}" > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Detect Deployment Folder
+        id: detect
+        run: |
+          if git diff --name-only HEAD^ HEAD | grep -q "^development/"; then
+            echo "kustomize_path=./development" >> $GITHUB_ENV
+          elif git diff --name-only HEAD^ HEAD | grep -q "^pre-releases/"; then
+            echo "kustomize_path=./pre-releases" >> $GITHUB_ENV
+          elif git diff --name-only HEAD^ HEAD | grep -q "^releases/"; then
+            echo "kustomize_path=./releases" >> $GITHUB_ENV
+          else
+            echo "No deployment folder changed."
+            exit 0
+          fi
+
+      - name: Apply Manifest using Kustomize
+        run: |
+          echo "Deploying using $kustomize_path"
+          kustomize build "$kustomize_path" | kubectl apply -f -
+
+      - name: Wait for Deployment to Stabilize
+        run: |
+          DEPLOYMENT_NAME=$(kubectl get deploy -o jsonpath='{.items[0].metadata.name}')
+          echo "Waiting for deployment: $DEPLOYMENT_NAME"
+          kubectl rollout status deployment/"$DEPLOYMENT_NAME" --timeout=120s
+
+      - name: Trigger Auto-Promotion Workflow
+        if: success()
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          event-type: k8s-deploy-success
+          client-payload: |
+            {
+              "source": "${{ env.kustomize_path }}"
+            }
