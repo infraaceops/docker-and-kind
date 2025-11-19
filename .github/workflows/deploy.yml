@@ -3,6 +3,7 @@ name: Deploy to Kubernetes and Trigger Promotion
 on:
   push:
     paths:
+      - "base/**"
       - "development/**"
       - "pre-releases/**"
       - "releases/**"
@@ -18,35 +19,42 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Install kubectl & kustomize
-        run: |
-          sudo snap install kubectl --classic
-          sudo snap install kustomize
-
-      - name: Configure kubeconfig
-        run: |
-          mkdir -p ~/.kube
-          echo "${{ secrets.KUBECONFIG_CONTENT }}" > ~/.kube/config
-          chmod 600 ~/.kube/config
-
-      - name: Detect Deployment Folder
+      - name: Detect Deployment Target
         id: detect
         run: |
-          if git diff --name-only HEAD^ HEAD | grep -q "^development/"; then
-            echo "kustomize_path=./development" >> $GITHUB_ENV
-          elif git diff --name-only HEAD^ HEAD | grep -q "^pre-releases/"; then
-            echo "kustomize_path=./pre-releases" >> $GITHUB_ENV
-          elif git diff --name-only HEAD^ HEAD | grep -q "^releases/"; then
-            echo "kustomize_path=./releases" >> $GITHUB_ENV
-          else
-            echo "No deployment folder changed."
+          CHANGED_FILES=$(git diff --name-only HEAD^ HEAD)
+
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+
+          # Default to no env
+          ENV_FOLDER=""
+
+          if echo "$CHANGED_FILES" | grep -q '^development/'; then
+            ENV_FOLDER="development"
+          elif echo "$CHANGED_FILES" | grep -q '^pre-releases/'; then
+            ENV_FOLDER="pre-releases"
+          elif echo "$CHANGED_FILES" | grep -q '^releases/'; then
+            ENV_FOLDER="releases"
+          elif echo "$CHANGED_FILES" | grep -q '^base/'; then
+            # If only base changed → deployment applies to development env by default (or you can change this)
+            ENV_FOLDER="development"
+          fi
+
+          if [ -z "$ENV_FOLDER" ]; then
+            echo "No deployable folder changed."
             exit 0
           fi
 
+          echo "kustomize_path=./$ENV_FOLDER" >> $GITHUB_ENV
+          echo "Detected environment overlay: $ENV_FOLDER"
+
       - name: Apply Manifest using Kustomize
         run: |
-          echo "Deploying using $kustomize_path"
+          echo "Deploying using: $kustomize_path"
           kustomize build "$kustomize_path" | kubectl apply -f -
 
       - name: Wait for Deployment to Stabilize
